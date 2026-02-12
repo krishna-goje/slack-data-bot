@@ -176,6 +176,44 @@ src/slack_data_bot/
         state.py            # Bot state persistence (answered, queue, stats)
 ```
 
+## Author
+
+**Krishna Goje** — Staff Analytics Engineer | AI-Augmented Engineering
+
+- Portfolio: [krishna-goje.github.io](https://krishna-goje.github.io)
+- LinkedIn: [linkedin.com/in/krishnagoje](https://www.linkedin.com/in/krishnagoje)
+- GitHub: [github.com/krishna-goje](https://github.com/krishna-goje)
+- Email: krishna19.gk@gmail.com
+
+### Background
+
+14 years building data platforms at American Express, Grubhub, Booking.com, and Opendoor. Pioneered an AI-augmented engineering ecosystem connecting 15+ enterprise platforms with parallel agent orchestration and self-learning feedback loops — compressing week-long workflows into under one hour.
+
+### Why This Project
+
+Data teams get buried in Slack. The same kinds of questions arrive daily — "why did the dashboard drop?", "what does this column mean?", "when was this data last refreshed?" Each one requires context-switching away from deep work, investigating across multiple tools, and crafting a thoughtful response.
+
+This bot exists because that cycle was eating 2-3 hours of my day. The 8-strategy search was built after discovering blind spots — questions in channels I didn't monitor, DMs I missed during focus time, keyword variations that slipped through simple filters.
+
+The Writer/Reviewer quality loop came from a different problem: rushed answers. When you're interrupted, the temptation is to fire off a quick reply. The quality loop enforces the standard I'd want if I had unlimited time — checking data accuracy, offering root cause analysis, and suggesting next steps.
+
+The human approval gate is non-negotiable. AI investigation is powerful but imperfect. Every response gets a human review before reaching the person who asked.
+
+### Open Source
+
+- [quicksight-mcp](https://github.com/krishna-goje/quicksight-mcp) — MCP server for AWS QuickSight management
+- [slack-data-bot](https://github.com/krishna-goje/slack-data-bot) — Autonomous data Q&A bot with Writer/Reviewer quality loop
+
+## Contributing
+
+Contributions are welcome. Please open an issue first to discuss what you would like to change.
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Run the tests (`pytest`)
+4. Commit your changes
+5. Open a pull request
+
 ## License
 
 MIT License. See [LICENSE](LICENSE) for details.
