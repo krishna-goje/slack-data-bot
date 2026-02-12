@@ -1,0 +1,62 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "slack-data-bot"
+version = "0.1.0"
+description = "Autonomous Slack bot that monitors channels for data questions, investigates using AI, and drafts responses with human approval"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.10"
+authors = [
+    {name = "Krishna Goje", email = "krishna19.gk@gmail.com"},
+]
+keywords = ["slack", "bot", "data", "ai", "autonomous", "claude"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Communications :: Chat",
+    "Topic :: Software Development :: Libraries",
+]
+dependencies = [
+    "slack-bolt>=1.18,<2",
+    "slack-sdk>=3.26,<4",
+    "apscheduler>=3.10,<4",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-asyncio>=0.21",
+    "ruff>=0.1",
+]
+
+[project.scripts]
+slack-data-bot = "slack_data_bot.bot:main"
+
+[project.urls]
+Homepage = "https://github.com/krishna-goje/slack-data-bot"
+Repository = "https://github.com/krishna-goje/slack-data-bot"
+Issues = "https://github.com/krishna-goje/slack-data-bot/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/slack_data_bot"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]

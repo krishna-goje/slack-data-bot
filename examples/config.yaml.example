@@ -1,0 +1,65 @@
+# Slack Data Bot Configuration
+# Copy to config.yaml and fill in your values.
+# Environment variables can be referenced with ${VAR_NAME} syntax.
+
+slack:
+  bot_token: ${SLACK_BOT_TOKEN}
+  app_token: ${SLACK_APP_TOKEN}         # for socket mode
+  signing_secret: ${SLACK_SIGNING_SECRET}
+  owner_user_id: ${SLACK_OWNER_ID}      # who gets notified for approvals
+
+monitoring:
+  poll_interval_minutes: 5
+  lookback_days: 7
+  channels:
+    - name: ask-data-team
+      id: C_YOUR_CHANNEL_ID
+  domain_keywords:
+    - quicksight
+    - dbt
+    - snowflake
+    - dashboard
+    - data model
+    - data issue
+  bot_usernames:
+    - slackbot
+    - github
+    - jira
+    - datadog
+    - pagerduty
+    - sentry
+    - circleci
+    - jenkins
+  owner_username: your.username
+
+engine:
+  backend: claude_code                   # claude_code | claude_api | openai
+  claude_code_path: claude               # path to claude CLI binary
+  investigation_timeout: 300             # seconds per investigation
+  review_timeout: 120                    # seconds per review round
+  max_concurrent: 3                      # parallel investigations
+
+delivery:
+  mode: human_approval                   # human_approval | auto_respond
+  auto_respond_confidence: 0.9           # threshold for auto mode
+
+quality:
+  max_rounds: 3
+  min_pass_criteria: 5
+  criteria:
+    - data_accuracy
+    - completeness
+    - root_cause
+    - time_period
+    - tone
+    - actionable
+    - caveats
+
+learning:
+  enabled: true
+  storage_dir: ~/.slack-data-bot/learning
+  feedback_tracking: true
+
+cache:
+  directory: ~/.slack-data-bot
+  answer_ttl_days: 30
