@@ -46,6 +46,7 @@ slack-data-bot = "slack_data_bot.bot:main"
 Homepage = "https://github.com/krishna-goje/slack-data-bot"
 Repository = "https://github.com/krishna-goje/slack-data-bot"
 Issues = "https://github.com/krishna-goje/slack-data-bot/issues"
+Changelog = "https://github.com/krishna-goje/slack-data-bot/blob/main/CHANGELOG.md"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/slack_data_bot"]
