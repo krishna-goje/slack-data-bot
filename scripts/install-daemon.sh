@@ -1,177 +1,154 @@
-#!/usr/bin/env bash
-#
-# install-daemon.sh - macOS launchd setup for Slack Data Bot
+#!/bin/bash
+# Install/uninstall/status the Slack Data Bot launchd daemon
 #
 # Usage:
-#   ./scripts/install-daemon.sh install    # Create and load the plist
-#   ./scripts/install-daemon.sh uninstall  # Unload and remove the plist
-#   ./scripts/install-daemon.sh status     # Check if running
-#
+#   ~/.slack-data-bot/install-daemon.sh install    # install + start
+#   ~/.slack-data-bot/install-daemon.sh uninstall  # stop + remove
+#   ~/.slack-data-bot/install-daemon.sh status     # check status + recent logs
+#   ~/.slack-data-bot/install-daemon.sh logs       # tail today's log
+
 set -euo pipefail
 
-PLIST_LABEL="com.slack-data-bot"
-PLIST_PATH="$HOME/Library/LaunchAgents/${PLIST_LABEL}.plist"
-CONFIG_PATH="$HOME/.slack-data-bot/config.yaml"
-LOG_DIR="$HOME/.slack-data-bot/logs"
-BOT_BIN="$(command -v slack-data-bot 2>/dev/null || echo "")"
+PLIST_NAME="com.krishna.slack-data-bot"
+PLIST_DIR="$HOME/Library/LaunchAgents"
+PLIST_FILE="$PLIST_DIR/$PLIST_NAME.plist"
+BOT_DIR="$HOME/.slack-data-bot"
+LOG_DIR="$BOT_DIR/logs"
+SCRIPT="$BOT_DIR/run-cycle.sh"
+# Run every 5 minutes (300 seconds)
+INTERVAL=300
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
+case "${1:-help}" in
+    install)
+        echo "Installing Slack Data Bot daemon..."
 
-usage() {
-    echo "Usage: $0 {install|uninstall|status}"
-    echo ""
-    echo "Commands:"
-    echo "  install    Create launchd plist and load it"
-    echo "  uninstall  Unload and remove the launchd plist"
-    echo "  status     Check if the daemon is running"
-    exit 1
-}
+        # Ensure script is executable
+        chmod +x "$SCRIPT"
 
-check_binary() {
-    if [ -z "$BOT_BIN" ]; then
-        echo "Error: slack-data-bot not found in PATH."
-        echo "Install it first: pip install slack-data-bot"
-        exit 1
-    fi
-    echo "Found binary: $BOT_BIN"
-}
-
-check_config() {
-    if [ ! -f "$CONFIG_PATH" ]; then
-        echo "Warning: Config not found at $CONFIG_PATH"
-        echo "Create it from the example:"
-        echo "  mkdir -p ~/.slack-data-bot"
-        echo "  cp examples/config.yaml.example ~/.slack-data-bot/config.yaml"
-        echo ""
-    fi
-}
-
-# ---------------------------------------------------------------------------
-# Commands
-# ---------------------------------------------------------------------------
-
-do_install() {
-    check_binary
-    check_config
-
-    # Create log directory
-    mkdir -p "$LOG_DIR"
-
-    # Create plist
-    cat > "$PLIST_PATH" << PLIST
+        # Create plist
+        mkdir -p "$PLIST_DIR" "$LOG_DIR"
+        cat > "$PLIST_FILE" << PLIST
 <?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
-  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>${PLIST_LABEL}</string>
+    <string>$PLIST_NAME</string>
 
     <key>ProgramArguments</key>
     <array>
-        <string>${BOT_BIN}</string>
-        <string>--config</string>
-        <string>${CONFIG_PATH}</string>
+        <string>/bin/bash</string>
+        <string>$SCRIPT</string>
+        <string>--learn</string>
     </array>
 
+    <key>StartInterval</key>
+    <integer>$INTERVAL</integer>
+
     <key>WorkingDirectory</key>
-    <string>${HOME}</string>
-
-    <key>RunAtLoad</key>
-    <true/>
-
-    <key>KeepAlive</key>
-    <dict>
-        <key>SuccessfulExit</key>
-        <false/>
-    </dict>
-
-    <key>ThrottleInterval</key>
-    <integer>60</integer>
+    <string>$BOT_DIR</string>
 
     <key>StandardOutPath</key>
-    <string>${LOG_DIR}/stdout.log</string>
+    <string>$LOG_DIR/daemon-stdout.log</string>
 
     <key>StandardErrorPath</key>
-    <string>${LOG_DIR}/stderr.log</string>
+    <string>$LOG_DIR/daemon-stderr.log</string>
 
     <key>EnvironmentVariables</key>
     <dict>
         <key>PATH</key>
-        <string>/usr/local/bin:/usr/bin:/bin:${HOME}/.local/bin</string>
+        <string>/usr/local/bin:/usr/bin:/bin:/opt/homebrew/bin:$HOME/.local/bin:$HOME/bin</string>
+        <key>HOME</key>
+        <string>$HOME</string>
     </dict>
+
+    <key>RunAtLoad</key>
+    <false/>
+
+    <key>KeepAlive</key>
+    <false/>
+
+    <key>ThrottleInterval</key>
+    <integer>60</integer>
 </dict>
 </plist>
 PLIST
 
-    echo "Created plist at $PLIST_PATH"
-
-    # Load the daemon
-    launchctl load "$PLIST_PATH"
-    echo "Daemon loaded. Slack Data Bot will start on login."
-    echo ""
-    echo "Logs:"
-    echo "  stdout: $LOG_DIR/stdout.log"
-    echo "  stderr: $LOG_DIR/stderr.log"
-    echo ""
-    echo "Manage:"
-    echo "  Status:    $0 status"
-    echo "  Stop:      launchctl unload $PLIST_PATH"
-    echo "  Start:     launchctl load $PLIST_PATH"
-    echo "  Uninstall: $0 uninstall"
-}
-
-do_uninstall() {
-    if [ ! -f "$PLIST_PATH" ]; then
-        echo "No plist found at $PLIST_PATH. Nothing to uninstall."
-        exit 0
-    fi
-
-    # Unload (ignoring errors if not loaded)
-    launchctl unload "$PLIST_PATH" 2>/dev/null || true
-
-    # Remove plist
-    rm -f "$PLIST_PATH"
-    echo "Daemon uninstalled. Plist removed from $PLIST_PATH"
-    echo "Log files preserved at $LOG_DIR"
-}
-
-do_status() {
-    if launchctl list 2>/dev/null | grep -q "$PLIST_LABEL"; then
-        echo "Slack Data Bot daemon is LOADED"
-        launchctl list "$PLIST_LABEL" 2>/dev/null || true
-    else
-        echo "Slack Data Bot daemon is NOT loaded"
-    fi
-
-    if [ -f "$PLIST_PATH" ]; then
-        echo "Plist exists at $PLIST_PATH"
-    else
-        echo "No plist found (not installed)"
-    fi
-
-    if [ -f "$LOG_DIR/stdout.log" ]; then
+        # Load the daemon
+        launchctl load "$PLIST_FILE"
+        echo "Installed and loaded: $PLIST_FILE"
+        echo "Bot will run every $(( INTERVAL / 60 )) minutes"
+        echo "Logs: $LOG_DIR/"
         echo ""
-        echo "Last 5 lines of stdout:"
-        tail -5 "$LOG_DIR/stdout.log" 2>/dev/null || echo "  (empty)"
-    fi
+        echo "To start immediately: launchctl start $PLIST_NAME"
+        echo "To check status:      ~/.slack-data-bot/install-daemon.sh status"
+        echo "To view logs:         ~/.slack-data-bot/install-daemon.sh logs"
+        ;;
 
-    if [ -f "$LOG_DIR/stderr.log" ]; then
+    uninstall)
+        echo "Uninstalling Slack Data Bot daemon..."
+        if [ -f "$PLIST_FILE" ]; then
+            launchctl unload "$PLIST_FILE" 2>/dev/null || true
+            rm "$PLIST_FILE"
+            echo "Removed: $PLIST_FILE"
+        else
+            echo "Not installed."
+        fi
+        ;;
+
+    status)
+        echo "=== Slack Data Bot Status ==="
+        if launchctl list | grep -q "$PLIST_NAME"; then
+            echo "Status: LOADED"
+            launchctl list "$PLIST_NAME" 2>/dev/null || true
+        else
+            echo "Status: NOT LOADED"
+        fi
         echo ""
-        echo "Last 5 lines of stderr:"
-        tail -5 "$LOG_DIR/stderr.log" 2>/dev/null || echo "  (empty)"
-    fi
-}
+        echo "=== Recent Cycles ==="
+        TODAY=$(date +%Y-%m-%d)
+        if [ -f "$LOG_DIR/$TODAY.log" ]; then
+            grep "CYCLE START\|CYCLE END\|FOUND:" "$LOG_DIR/$TODAY.log" | tail -20
+        else
+            echo "No logs for today yet."
+        fi
+        echo ""
+        echo "=== Learnings ==="
+        if [ -f "$BOT_DIR/learnings/improvements.jsonl" ]; then
+            echo "$(wc -l < "$BOT_DIR/learnings/improvements.jsonl") improvement entries"
+            tail -3 "$BOT_DIR/learnings/improvements.jsonl"
+        else
+            echo "No learnings yet."
+        fi
+        ;;
 
-# ---------------------------------------------------------------------------
-# Main
-# ---------------------------------------------------------------------------
+    logs)
+        TODAY=$(date +%Y-%m-%d)
+        LOG="$LOG_DIR/$TODAY.log"
+        if [ -f "$LOG" ]; then
+            tail -100 "$LOG"
+        else
+            echo "No log file for today: $LOG"
+            echo "Most recent log:"
+            ls -t "$LOG_DIR"/*.log 2>/dev/null | head -1 | xargs tail -50 2>/dev/null || echo "No logs found."
+        fi
+        ;;
 
-case "${1:-}" in
-    install)   do_install ;;
-    uninstall) do_uninstall ;;
-    status)    do_status ;;
-    *)         usage ;;
+    run)
+        echo "Running single cycle now..."
+        bash "$SCRIPT" --learn
+        echo "Done. Check: ~/.slack-data-bot/install-daemon.sh logs"
+        ;;
+
+    *)
+        echo "Slack Data Bot Daemon"
+        echo ""
+        echo "Usage: $0 {install|uninstall|status|logs|run}"
+        echo ""
+        echo "  install    Install launchd daemon (runs every 5 min)"
+        echo "  uninstall  Remove launchd daemon"
+        echo "  status     Show daemon status + recent cycles"
+        echo "  logs       Show today's log"
+        echo "  run        Run one cycle now (with self-learning)"
+        ;;
 esac
