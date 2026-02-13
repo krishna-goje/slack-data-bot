@@ -15,3 +15,22 @@ config.yaml
 *.log
 htmlcov/
 .coverage
+
+# Secrets (NEVER commit)
+.env.local
+.env.*.local
+secrets.json
+*.pem
+*.key
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*~
+
+# OS
+.DS_Store
+
+# Claude Code
+.claude/
