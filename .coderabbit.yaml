@@ -1,40 +1,22 @@
 # CodeRabbit configuration
-# Docs: https://docs.coderabbit.ai/guides/configure-coderabbit
-
+# https://docs.coderabbit.ai/guides/configure-coderabbit
 language: en-US
-
 reviews:
-  auto_review:
-    enabled: true
-    drafts: false
-
-  profile: assertive
-  request_changes_workflow: true
+  profile: chill
   high_level_summary: true
   poem: false
   review_status: true
-  collapse_walkthrough: false
-
+  auto_review:
+    enabled: true
+    drafts: false
   path_instructions:
-    - path: "src/slack_data_bot/**/*.py"
-      instructions: |
-        This is a Slack bot that monitors channels for data questions.
-        Check for:
-        - No hardcoded Slack tokens, channel IDs, or workspace-specific values
-        - Proper error handling for Slack API calls
-        - No print() statements (use logging)
-        - Thread-safe state management
-
-    - path: "**/*.py"
-      instructions: |
-        General Python review. Check for:
-        - No hardcoded credentials or API keys
-        - No print() statements (use logger)
-        - Python 3.10+ compatible syntax
-
+    - path: "src/**/*.py"
+      instructions: "Review for Python best practices, type safety, and clean architecture. Check for hardcoded values that should be configurable."
+    - path: "tests/**/*.py"
+      instructions: "Verify tests are meaningful. Check edge cases and mocking quality."
+    - path: "scripts/**"
+      instructions: "Check for shell scripting best practices, macOS compatibility, and security (no secrets, proper quoting)."
+    - path: "examples/**"
+      instructions: "Ensure no hardcoded usernames, company names, or internal references. Everything should use placeholders."
 chat:
   auto_reply: true
-
-knowledge_base:
-  learnings:
-    scope: auto
