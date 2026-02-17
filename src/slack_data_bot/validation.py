@@ -34,14 +34,12 @@ def validate_config(config: BotConfig) -> list[str]:
     # -- Slack tokens -------------------------------------------------------
     if config.slack.bot_token and not config.slack.bot_token.startswith("xoxb-"):
         errors.append(
-            "slack.bot_token must start with 'xoxb-' "
-            f"(got '{config.slack.bot_token[:8]}...')"
+            "slack.bot_token must start with 'xoxb-'"
         )
 
     if config.slack.app_token and not config.slack.app_token.startswith("xapp-"):
         errors.append(
-            "slack.app_token must start with 'xapp-' "
-            f"(got '{config.slack.app_token[:8]}...')"
+            "slack.app_token must start with 'xapp-'"
         )
 
     if config.slack.owner_user_id and not config.slack.owner_user_id.startswith("U"):

@@ -221,7 +221,14 @@ class SlackDataBot:
             logger.warning("No pending approval found for key %s", approval_key)
             return
 
-        decision = self.approval.handle_action(action_id, approval_key, user_id)
+        try:
+            decision = self.approval.handle_action(action_id, approval_key, user_id)
+        except PermissionError:
+            logger.warning("Unauthorized approval attempt by user %s", user_id)
+            return
+        except ValueError as exc:
+            logger.warning("Invalid approval action: %s", exc)
+            return
 
         if decision == ApprovalAction.APPROVE:
             self._on_approval(pending.message, pending.draft)
@@ -364,13 +371,9 @@ def main() -> None:
 
     args = parser.parse_args()
 
-    # Configure logging
-    log_level = logging.DEBUG if args.verbose else logging.INFO
-    logging.basicConfig(
-        level=log_level,
-        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S",
-    )
+    # Configure logging (structured JSON unless --verbose for human-readable)
+    from slack_data_bot.logging_config import setup_logging
+    setup_logging(verbose=args.verbose, json_output=not args.verbose)
 
     # Load configuration
     try:

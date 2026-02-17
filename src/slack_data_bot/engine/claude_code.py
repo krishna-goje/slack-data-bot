@@ -11,18 +11,12 @@ import subprocess
 import threading
 from typing import TYPE_CHECKING
 
+from slack_data_bot.resilience import redact_secrets, sanitize_user_input
+
 if TYPE_CHECKING:
     from slack_data_bot.config import EngineConfig
 
 logger = logging.getLogger(__name__)
-
-
-def _redact_for_log(text: str) -> str:
-    """Remove token-like strings from text before logging."""
-    import re
-    text = re.sub(r'xox[bpa]-[A-Za-z0-9\-]+', 'xox*-[REDACTED]', text)
-    text = re.sub(r'xapp-[A-Za-z0-9\-]+', 'xapp-[REDACTED]', text)
-    return text
 
 
 class ClaudeCodeError(Exception):
@@ -104,7 +98,7 @@ class ClaudeCodeEngine:
             "",
             "## Question",
             "<user_question>",
-            question,
+            sanitize_user_input(question).replace("</user_question>", ""),
             "</user_question>",
         ]
 
@@ -220,7 +214,7 @@ class ClaudeCodeEngine:
             logger.error(
                 "Claude Code exited with code %d: %s",
                 result.returncode,
-                _redact_for_log(result.stderr[:500]),
+                redact_secrets(result.stderr[:500]),
             )
             raise ClaudeCodeError(
                 f"Claude Code exited with code {result.returncode}",

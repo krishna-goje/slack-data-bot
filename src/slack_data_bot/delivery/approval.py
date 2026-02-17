@@ -128,7 +128,11 @@ class ApprovalFlow:
         """
         # Verify the user is the configured owner
         owner_id = self.config.slack.owner_user_id
-        if owner_id and user_id != owner_id:
+        if not owner_id:
+            raise PermissionError(
+                "No owner_user_id configured; cannot authorize approval actions"
+            )
+        if user_id != owner_id:
             logger.warning(
                 "Unauthorized approval attempt by user %s (owner is %s)",
                 user_id, owner_id,
