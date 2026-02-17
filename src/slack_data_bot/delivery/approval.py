@@ -126,6 +126,15 @@ class ApprovalFlow:
         ValueError
             If ``action_id`` does not map to a known action.
         """
+        # Verify the user is the configured owner
+        owner_id = self.config.slack.owner_user_id
+        if owner_id and user_id != owner_id:
+            logger.warning(
+                "Unauthorized approval attempt by user %s (owner is %s)",
+                user_id, owner_id,
+            )
+            raise PermissionError(f"User {user_id} is not authorized to approve responses")
+
         action_map = {
             "approve": ApprovalAction.APPROVE,
             "edit": ApprovalAction.EDIT,
