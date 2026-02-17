@@ -49,7 +49,7 @@ def validate_config(config: BotConfig) -> list[str]:
         )
 
     # -- Engine -------------------------------------------------------------
-    if config.engine.claude_code_path:
+    if config.engine.backend == "claude_code" and config.engine.claude_code_path:
         if shutil.which(config.engine.claude_code_path) is None:
             errors.append(
                 f"engine.claude_code_path '{config.engine.claude_code_path}' "
