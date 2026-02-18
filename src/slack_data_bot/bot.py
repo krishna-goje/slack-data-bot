@@ -17,6 +17,7 @@ from slack_data_bot.delivery.approval import ApprovalAction, ApprovalFlow
 from slack_data_bot.delivery.notifier import Notifier
 from slack_data_bot.engine.investigator import InvestigationEngine
 from slack_data_bot.monitor.dedup import SlackMessage
+from slack_data_bot.validation import validate_config_or_raise
 
 logger = logging.getLogger(__name__)
 
@@ -95,12 +96,19 @@ class SlackDataBot:
 
     def stop(self) -> None:
         """Gracefully shut down all subsystems."""
-        logger.info("Stopping Slack Data Bot")
+        logger.info("Stopping Slack Data Bot — waiting for in-progress work...")
         self._running = False
+
+        # Save any pending state
+        if self.state is not None:
+            try:
+                self.state.prune_old_entries()
+            except Exception:
+                logger.debug("Could not prune state during shutdown")
 
         if self._scheduler is not None:
             try:
-                self._scheduler.shutdown(wait=False)
+                self._scheduler.shutdown(wait=True)  # wait=True for graceful
             except Exception:
                 logger.debug("Scheduler already shut down")
 
@@ -127,16 +135,16 @@ class SlackDataBot:
 
         try:
             # Load answered message cache
-            answered_ids: set[str] = set()
+            answered_cache: dict = {}
             if self.state is not None:
-                answered_ids = self.state.load_answered_ids()
+                answered_cache = self.state.get_answered_cache()
 
             # Find unanswered questions
             if self.monitor is None:
                 logger.warning("No monitor configured; skipping poll cycle")
                 return 0
 
-            questions: list[SlackMessage] = self.monitor.find_unanswered(answered_ids)
+            questions: list[SlackMessage] = self.monitor.find_unanswered(answered_cache)
             if not questions:
                 logger.info("No unanswered questions found")
                 return 0
@@ -154,9 +162,7 @@ class SlackDataBot:
                         "Failed to process question %s", question.message_id,
                     )
 
-            # Persist state
-            if self.state is not None:
-                self.state.save()
+            # State is persisted by mark_answered(); no separate save needed.
 
         except Exception:
             logger.exception("Poll cycle failed")
@@ -215,7 +221,14 @@ class SlackDataBot:
             logger.warning("No pending approval found for key %s", approval_key)
             return
 
-        decision = self.approval.handle_action(action_id, approval_key, user_id)
+        try:
+            decision = self.approval.handle_action(action_id, approval_key, user_id)
+        except PermissionError:
+            logger.warning("Unauthorized approval attempt by user %s", user_id)
+            return
+        except ValueError as exc:
+            logger.warning("Invalid approval action: %s", exc)
+            return
 
         if decision == ApprovalAction.APPROVE:
             self._on_approval(pending.message, pending.draft)
@@ -233,7 +246,7 @@ class SlackDataBot:
         self.approval.post_approved_response(message, draft)
 
         if self.state is not None:
-            self.state.mark_answered(message.message_id)
+            self.state.mark_answered(message.ts, message.channel_id, message.text[:100])
 
         if self.tracker is not None:
             self.tracker.record_approval(message)
@@ -358,19 +371,22 @@ def main() -> None:
 
     args = parser.parse_args()
 
-    # Configure logging
-    log_level = logging.DEBUG if args.verbose else logging.INFO
-    logging.basicConfig(
-        level=log_level,
-        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S",
-    )
+    # Configure logging (structured JSON unless --verbose for human-readable)
+    from slack_data_bot.logging_config import setup_logging
+    setup_logging(verbose=args.verbose, json_output=not args.verbose)
 
     # Load configuration
     try:
         config = load_config(args.config)
     except (FileNotFoundError, ValueError) as exc:
         logger.error("Configuration error: %s", exc)
+        sys.exit(1)
+
+    # Validate configuration schema and required fields
+    try:
+        validate_config_or_raise(config)
+    except Exception as exc:
+        logger.error("Configuration validation failed: %s", exc)
         sys.exit(1)
 
     logger.info("Configuration loaded successfully")

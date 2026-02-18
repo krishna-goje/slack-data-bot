@@ -93,7 +93,7 @@ class TestFullApprovalFlow:
         assert pending is not None
 
         # Approve
-        action = flow.handle_action("approve", aid, "U_REVIEWER")
+        action = flow.handle_action("approve", aid, "U_TEST_OWNER")
         assert action == ApprovalAction.APPROVE
 
         # Post
@@ -112,7 +112,7 @@ class TestFullApprovalFlow:
         msg = _msg()
         aid = flow.submit_for_approval(msg, "Bad draft.")
 
-        action = flow.handle_action("reject", aid, "U_REVIEWER")
+        action = flow.handle_action("reject", aid, "U_TEST_OWNER")
         assert action == ApprovalAction.REJECT
 
         # Verify pending still exists until explicitly removed

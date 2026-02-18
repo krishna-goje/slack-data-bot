@@ -85,18 +85,18 @@ class TestApprovalFlow:
 
     def test_approval_handle_approve(self, sample_config):
         flow = ApprovalFlow(sample_config, slack_client=None)
-        action = flow.handle_action("approve", "some_id", "U_REVIEWER")
+        action = flow.handle_action("approve", "some_id", "U_TEST_OWNER")
         assert action == ApprovalAction.APPROVE
 
     def test_approval_handle_reject(self, sample_config):
         flow = ApprovalFlow(sample_config, slack_client=None)
-        action = flow.handle_action("reject", "some_id", "U_REVIEWER")
+        action = flow.handle_action("reject", "some_id", "U_TEST_OWNER")
         assert action == ApprovalAction.REJECT
 
     def test_approval_handle_unknown_action(self, sample_config):
         flow = ApprovalFlow(sample_config, slack_client=None)
         with pytest.raises(ValueError, match="Unknown action_id"):
-            flow.handle_action("unknown", "id", "U1")
+            flow.handle_action("unknown", "id", "U_TEST_OWNER")
 
     def test_approval_post_response(self, sample_config, mock_slack_client):
         flow = ApprovalFlow(sample_config, slack_client=mock_slack_client)
