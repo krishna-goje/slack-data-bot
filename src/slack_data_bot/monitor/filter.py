@@ -59,9 +59,7 @@ class MessageFilter:
             return True
         if msg.get("subtype") == "bot_message":
             return True
-        if msg.get("bot_id"):
-            return True
-        return False
+        return bool(msg.get("bot_id"))
 
     def is_fyi_mention(self, text: str) -> bool:
         """Detect informational @mentions (cc, fyi, looping in, etc.)."""

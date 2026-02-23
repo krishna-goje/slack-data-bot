@@ -1,4 +1,8 @@
-"""Slack monitor - orchestrates search, filter, dedup, and prioritize."""
+"""Async Slack monitor - orchestrates search, filter, dedup, and prioritize.
+
+Rewritten for the MCP architecture: uses async SlackApiClient (httpx)
+instead of sync slack-sdk WebClient.
+"""
 
 from __future__ import annotations
 
@@ -19,14 +23,15 @@ from slack_data_bot.monitor.search import (
 logger = logging.getLogger(__name__)
 
 
-class SlackSearchClient(Protocol):
-    """Protocol for the Slack client's search interface.
+class AsyncSlackSearchClient(Protocol):
+    """Protocol for the async Slack client's search interface.
 
-    Any object providing ``search_messages(query, count, page)`` will work.
-    This keeps the monitor decoupled from a specific Slack SDK version.
+    Any object providing ``search_messages(query, count, page)`` as an
+    async method will work. This keeps the monitor decoupled from the
+    specific HTTP client implementation.
     """
 
-    def search_messages(
+    async def search_messages(
         self,
         query: str,
         count: int = 100,
@@ -35,11 +40,11 @@ class SlackSearchClient(Protocol):
 
 
 class SlackMonitor:
-    """Orchestrates the full monitoring cycle.
+    """Orchestrates the full monitoring cycle (async version).
 
     Lifecycle:
         1. Generate search strategies from config
-        2. Execute each strategy against Slack search API
+        2. Execute each strategy against Slack search API (async)
         3. Parse raw results into ``SlackMessage`` objects
         4. Separate owner responses (strategy 8) for answered filtering
         5. Filter out bots and answered threads
@@ -50,7 +55,7 @@ class SlackMonitor:
     def __init__(
         self,
         config: BotConfig,
-        slack_client: SlackSearchClient | None = None,
+        slack_client: AsyncSlackSearchClient | None = None,
     ) -> None:
         self.config = config
         self.monitoring = config.monitoring
@@ -58,7 +63,7 @@ class SlackMonitor:
         self.scorer = PriorityScorer(config.monitoring)
         self.slack_client = slack_client
 
-    def find_unanswered(
+    async def find_unanswered(
         self,
         answered_cache: dict | None = None,
     ) -> list[SlackMessage]:
@@ -89,7 +94,7 @@ class SlackMonitor:
         owner_responses: list[SlackMessage] = []
 
         for strategy in strategies:
-            raw_results = self._search_slack(strategy)
+            raw_results = await self._search_slack(strategy)
             parsed = self._parse_results(raw_results, strategy)
 
             if strategy.name == "owner_responses":
@@ -106,7 +111,6 @@ class SlackMonitor:
         # Step 5: Score each message
         for msg in all_messages:
             strategy_name = msg.metadata.get("strategy", "")
-            # Find the matching strategy for scoring context
             matched_strategy = next(
                 (s for s in strategies if s.name == strategy_name),
                 strategies[0] if strategies else SearchStrategy(name="fallback", query=""),
@@ -133,17 +137,11 @@ class SlackMonitor:
         )
         return unique
 
-    def _search_slack(self, strategy: SearchStrategy) -> list[dict]:
-        """Execute a search strategy against the Slack API.
+    async def _search_slack(self, strategy: SearchStrategy) -> list[dict]:
+        """Execute a search strategy against the Slack API (async).
 
         Handles pagination automatically -- fetches up to ``strategy.count``
         results across multiple pages.
-
-        Args:
-            strategy: The search strategy to execute.
-
-        Returns:
-            List of raw message dicts from Slack's search API.
         """
         if self.slack_client is None:
             logger.warning("No Slack client configured; skipping search")
@@ -156,7 +154,7 @@ class SlackMonitor:
         while remaining > 0:
             page_size = min(remaining, 100)
             try:
-                response = self.slack_client.search_messages(
+                response = await self.slack_client.search_messages(
                     query=strategy.query,
                     count=page_size,
                     page=page,
@@ -177,7 +175,6 @@ class SlackMonitor:
             results.extend(matches)
             remaining -= len(matches)
 
-            # Check if there are more pages
             paging = messages_data.get("paging", {})
             total_pages = paging.get("pages", 1)
             if page >= total_pages:
@@ -198,19 +195,10 @@ class SlackMonitor:
     ) -> list[SlackMessage]:
         """Convert raw Slack search results into SlackMessage objects.
 
-        Silently drops messages that fail to parse (returns ``None`` from
-        ``parse_message``) or that are from bots.
-
-        Args:
-            raw_results: Raw message dicts from Slack search API.
-            strategy: The strategy that produced these results.
-
-        Returns:
-            List of parsed, non-bot ``SlackMessage`` instances.
+        Silently drops messages that fail to parse or that are from bots.
         """
         parsed: list[SlackMessage] = []
         for raw in raw_results:
-            # Skip bot messages early
             if self.filter.is_bot_message(raw):
                 continue
 

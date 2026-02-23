@@ -1,7 +1,13 @@
-"""Bot state management - persists answered questions, queue, and configuration state."""
+"""Bot state management - persists answered questions, queue, and configuration state.
+
+Supports both sync and async operations. Async methods use atomic file writes
+with proper locking to prevent corruption from concurrent access.
+"""
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
 import json
 import logging
 import os
@@ -21,9 +27,16 @@ DEFAULT_STATE: dict = {
     "stats": {"total_questions": 0, "total_answered": 0},
 }
 
+# Module-level async lock for file operations
+_file_lock = asyncio.Lock()
+
 
 class BotState:
-    """Persists bot state including answered questions, queue, and stats."""
+    """Persists bot state including answered questions, queue, and stats.
+
+    Provides both sync and async interfaces. Async methods are preferred
+    for use within the MCP server's async context.
+    """
 
     def __init__(self, config: CacheConfig) -> None:
         self.config = config
@@ -34,6 +47,10 @@ class BotState:
         """Create cache directory if it doesn't exist."""
         self.config.cache_path.mkdir(parents=True, exist_ok=True)
 
+    # ------------------------------------------------------------------
+    # Sync methods (kept for backward compatibility and simple scripts)
+    # ------------------------------------------------------------------
+
     def load(self) -> dict:
         """Load state from disk. Returns default state if missing or corrupt."""
         if not self._state_file.exists():
@@ -42,7 +59,6 @@ class BotState:
         try:
             with self._state_file.open("r", encoding="utf-8") as f:
                 state = json.load(f)
-            # Ensure all expected keys are present
             for key, default_value in DEFAULT_STATE.items():
                 if isinstance(default_value, (dict, list)):
                     state.setdefault(key, type(default_value)())
@@ -66,11 +82,8 @@ class BotState:
                     json.dump(state, f, indent=2, default=str)
                 os.replace(tmp_path, self._state_file)
             except BaseException:
-                # Clean up temp file on any failure
-                try:
+                with contextlib.suppress(OSError):
                     os.unlink(tmp_path)
-                except OSError:
-                    pass
                 raise
         except OSError:
             logger.exception("Failed to save state to %s", self._state_file)
@@ -86,7 +99,6 @@ class BotState:
             "answered_at": datetime.now(timezone.utc).isoformat(),
         }
         state["stats"]["total_answered"] = state["stats"].get("total_answered", 0) + 1
-        # Remove from in_progress if present
         state["in_progress"].pop(key, None)
         self.save(state)
 
@@ -146,10 +158,43 @@ class BotState:
         """Remove a message from the queue by its timestamp ID."""
         state = self.load()
         state["queue"] = [
-            item for item in state.get("queue", [])
-            if item.get("message_ts") != message_id
+            item for item in state.get("queue", []) if item.get("message_ts") != message_id
         ]
         self.save(state)
+
+    # ------------------------------------------------------------------
+    # Async methods (preferred for MCP server context)
+    # ------------------------------------------------------------------
+
+    async def aload(self) -> dict:
+        """Async version of load() with file locking."""
+        async with _file_lock:
+            return await asyncio.to_thread(self.load)
+
+    async def asave(self, state: dict) -> None:
+        """Async version of save() with file locking."""
+        async with _file_lock:
+            await asyncio.to_thread(self.save, state)
+
+    async def amark_answered(self, message_ts: str, channel_id: str, summary: str) -> None:
+        """Async version of mark_answered()."""
+        async with _file_lock:
+            await asyncio.to_thread(self.mark_answered, message_ts, channel_id, summary)
+
+    async def ais_answered(self, message_ts: str, channel_id: str) -> bool:
+        """Async version of is_answered()."""
+        async with _file_lock:
+            return await asyncio.to_thread(self.is_answered, message_ts, channel_id)
+
+    async def aget_answered_cache(self) -> dict:
+        """Async version of get_answered_cache()."""
+        async with _file_lock:
+            return await asyncio.to_thread(self.get_answered_cache)
+
+    async def aprune_old_entries(self) -> None:
+        """Async version of prune_old_entries()."""
+        async with _file_lock:
+            await asyncio.to_thread(self.prune_old_entries)
 
 
 def _deep_copy_default() -> dict:

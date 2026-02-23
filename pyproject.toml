@@ -4,15 +4,15 @@ build-backend = "hatchling.build"
 
 [project]
 name = "slack-data-bot"
-version = "0.1.0"
-description = "Autonomous Slack bot that monitors channels for data questions, investigates using AI, and drafts responses with human approval"
+version = "0.2.0"
+description = "MCP server that monitors Slack for data questions, investigates using parallel AI agents, and drafts polished responses"
 readme = "README.md"
 license = {text = "MIT"}
 requires-python = ">=3.10"
 authors = [
     {name = "Krishna Goje", email = "krishna19.gk@gmail.com"},
 ]
-keywords = ["slack", "bot", "data", "ai", "autonomous", "claude"]
+keywords = ["slack", "mcp", "data", "ai", "agents", "claude", "model-context-protocol"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
@@ -26,22 +26,27 @@ classifiers = [
     "Topic :: Software Development :: Libraries",
 ]
 dependencies = [
-    "slack-bolt>=1.18,<2",
-    "slack-sdk>=3.26,<4",
-    "apscheduler>=3.10,<4",
+    "mcp>=1.9.0",
+    "httpx>=0.27.0",
+    "pydantic>=2.0.0",
+    "pydantic-settings>=2.0.0",
+    "anthropic>=0.45.0",
+    "tenacity>=9.0.0",
     "pyyaml>=6.0",
-    "tenacity>=8.2,<10",
+    "structlog>=24.0.0",
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest>=7.0",
     "pytest-asyncio>=0.21",
+    "pytest-httpx>=0.30",
     "ruff>=0.1",
+    "mypy>=1.0",
 ]
 
 [project.scripts]
-slack-data-bot = "slack_data_bot.bot:main"
+slack-data-bot = "slack_data_bot.server:main"
 
 [project.urls]
 Homepage = "https://github.com/krishna-goje/slack-data-bot"
@@ -57,8 +62,15 @@ line-length = 100
 target-version = "py310"
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "W"]
+select = ["E", "F", "I", "W", "UP", "B", "SIM"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
+asyncio_mode = "auto"
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true

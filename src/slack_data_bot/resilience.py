@@ -6,7 +6,8 @@ import logging
 import re
 import threading
 import time
-from typing import Any, Sequence, Type
+from collections.abc import Sequence
+from typing import Any
 
 from tenacity import (
     RetryCallState,
@@ -42,7 +43,7 @@ def with_retry(
     max_attempts: int = 3,
     min_wait: int = 1,
     max_wait: int = 30,
-    retryable_exceptions: tuple[Type[BaseException], ...] = (Exception,),
+    retryable_exceptions: tuple[type[BaseException], ...] = (Exception,),
 ) -> Any:
     """Decorator factory for retrying functions with exponential backoff + jitter.
 

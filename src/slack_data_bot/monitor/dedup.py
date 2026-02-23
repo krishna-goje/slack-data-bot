@@ -7,7 +7,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
-from typing import Optional
 
 
 @dataclass
@@ -21,7 +20,7 @@ class SlackMessage:
     text: str
     timestamp: datetime
     permalink: str
-    thread_ts: Optional[str] = None
+    thread_ts: str | None = None
     is_direct_mention: bool = False
     is_domain_question: bool = False
     is_dm: bool = False

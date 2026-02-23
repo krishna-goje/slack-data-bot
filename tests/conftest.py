@@ -5,17 +5,15 @@ from __future__ import annotations
 import textwrap
 from datetime import datetime, timezone
 from pathlib import Path
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock
 
 import pytest
 
 from slack_data_bot.config import (
+    AnthropicConfig,
     BotConfig,
     CacheConfig,
     ChannelConfig,
-    DeliveryConfig,
-    EngineConfig,
-    LearningConfig,
     MonitorConfig,
     QualityConfig,
     SlackConfig,
@@ -33,8 +31,6 @@ def sample_config() -> BotConfig:
     return BotConfig(
         slack=SlackConfig(
             bot_token="xoxb-test-token-000",
-            app_token="xapp-test-token-000",
-            signing_secret="test_signing_secret_000",
             owner_user_id="U_TEST_OWNER",
         ),
         monitoring=MonitorConfig(
@@ -48,14 +44,11 @@ def sample_config() -> BotConfig:
             bot_usernames=["slackbot", "github", "jira"],
             owner_username="testowner",
         ),
-        engine=EngineConfig(
-            backend="claude_code",
-            claude_code_path="/usr/local/bin/claude",
-            investigation_timeout=60,
-            review_timeout=30,
-            max_concurrent=2,
+        anthropic=AnthropicConfig(
+            api_key="sk-ant-test-000",
+            model="claude-opus-4-6-20250219",
+            max_tokens=4096,
         ),
-        delivery=DeliveryConfig(mode="human_approval", auto_respond_confidence=0.9),
         quality=QualityConfig(
             max_rounds=3,
             min_pass_criteria=5,
@@ -68,11 +61,6 @@ def sample_config() -> BotConfig:
                 "actionable",
                 "caveats",
             ],
-        ),
-        learning=LearningConfig(
-            enabled=True,
-            storage_dir="/tmp/sdb-test-learning",
-            feedback_tracking=True,
         ),
         cache=CacheConfig(directory="/tmp/sdb-test-cache", answer_ttl_days=30),
     )
@@ -172,11 +160,21 @@ def sample_messages() -> list[SlackMessage]:
 
 
 @pytest.fixture()
-def mock_slack_client() -> MagicMock:
-    """Mock Slack WebClient with common methods stubbed."""
-    client = MagicMock()
-    client.search_messages.return_value = {"messages": {"matches": [], "paging": {"pages": 1}}}
-    client.chat_postMessage.return_value = {"ok": True, "ts": "1770000000.000001"}
+def mock_slack_client() -> AsyncMock:
+    """Mock async Slack client with common methods stubbed."""
+    client = AsyncMock()
+    client.search_messages.return_value = {
+        "ok": True,
+        "messages": {"matches": [], "paging": {"pages": 1}},
+    }
+    client.get_thread_replies.return_value = {
+        "ok": True,
+        "messages": [],
+    }
+    client.get_user_info.return_value = {
+        "ok": True,
+        "user": {"id": "U_TEST", "name": "testuser", "real_name": "Test User"},
+    }
     return client
 
 
@@ -189,7 +187,8 @@ def mock_slack_client() -> MagicMock:
 def tmp_config_file(tmp_path: Path) -> Path:
     """Write a minimal YAML config to a temp file and return the path."""
     cfg = tmp_path / "config.yaml"
-    cfg.write_text(textwrap.dedent("""\
+    cfg.write_text(
+        textwrap.dedent("""\
         slack:
           bot_token: "xoxb-tmp-token"
           owner_user_id: "U_TMP_OWNER"
@@ -205,11 +204,13 @@ def tmp_config_file(tmp_path: Path) -> Path:
           bot_usernames:
             - slackbot
           owner_username: "tmpowner"
-        engine:
-          investigation_timeout: 30
+        anthropic:
+          model: "claude-opus-4-6-20250219"
+          max_tokens: 2048
         cache:
           directory: "{cache_dir}"
-    """).format(cache_dir=str(tmp_path / "cache")))
+    """).format(cache_dir=str(tmp_path / "cache"))
+    )
     return cfg
 
 
