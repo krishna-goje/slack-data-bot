@@ -1,0 +1,75 @@
+# DataKrait / slack-data-bot configuration
+#
+# Copy to config.yaml and fill in your values.
+# Environment variables can be referenced with ${VAR_NAME} syntax.
+# All values have sensible defaults — only secrets are required.
+
+slack:
+  # Required: Slack Bot User OAuth Token (xoxb-...)
+  bot_token: "${SLACK_BOT_TOKEN}"
+
+  # Required for Socket Mode (datakrait agent): App-Level Token (xapp-...)
+  app_token: "${SLACK_APP_TOKEN}"
+
+  # Optional: Signing secret (used for HTTP mode, not Socket Mode)
+  signing_secret: "${SLACK_SIGNING_SECRET}"
+
+  # Your Slack user ID (for filtering "my" mentions)
+  owner_user_id: ""
+
+monitoring:
+  poll_interval_minutes: 5
+  lookback_days: 7
+
+  # Channels to monitor for data questions
+  channels:
+    - name: ask-data-team
+      id: C0123456789
+    - name: data-engineering
+      id: C9876543210
+
+  # Keywords that indicate a data question
+  domain_keywords:
+    - quicksight
+    - dbt
+    - snowflake
+    - dashboard
+    - metric
+    - report
+
+  # Bot usernames to ignore
+  bot_usernames:
+    - slackbot
+    - github
+    - jira
+
+  # Your Slack username (for mention detection)
+  owner_username: ""
+
+anthropic:
+  # Required: Anthropic API key
+  api_key: "${ANTHROPIC_API_KEY}"
+
+  # Model to use for investigation agents
+  model: "claude-opus-4-6-20250219"
+  max_tokens: 4096
+  thinking: "adaptive"
+  temperature: 1.0
+  max_concurrent_agents: 5
+  timeout_seconds: 300
+
+quality:
+  max_rounds: 3
+  min_pass_criteria: 5
+  criteria:
+    - data_accuracy
+    - completeness
+    - root_cause
+    - time_period
+    - tone
+    - actionable
+    - caveats
+
+cache:
+  directory: "~/.slack-data-bot"
+  answer_ttl_days: 30

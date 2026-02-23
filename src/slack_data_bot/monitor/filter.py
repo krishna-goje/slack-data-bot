@@ -20,7 +20,7 @@ class MessageFilter:
 
     # FYI patterns that indicate the @mention is informational, not a question
     _FYI_PATTERNS = re.compile(
-        r"(?i)\b(?:cc:|fyi:|looping\s+in\s+@|adding\s+@|copying\s+@|cc\s+@|cc'ing)",
+        r"(?i)\b(?:cc:?\s|fyi:?\s|fyi\b|looping\s+in\s+@|adding\s+@|copying\s+@|cc\s+@|cc'ing)",
     )
 
     # Question indicators
@@ -59,9 +59,7 @@ class MessageFilter:
             return True
         if msg.get("subtype") == "bot_message":
             return True
-        if msg.get("bot_id"):
-            return True
-        return False
+        return bool(msg.get("bot_id"))
 
     def is_fyi_mention(self, text: str) -> bool:
         """Detect informational @mentions (cc, fyi, looping in, etc.)."""

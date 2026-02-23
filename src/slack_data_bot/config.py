@@ -1,4 +1,4 @@
-"""Configuration management for Slack Data Bot.
+"""Configuration management for Slack Data Bot MCP Server.
 
 Loads from YAML file with environment variable expansion.
 All values have sensible defaults for quick start.
@@ -19,12 +19,14 @@ def _expand_env_vars(value: Any) -> Any:
     """Recursively expand ${ENV_VAR} references in config values."""
     if isinstance(value, str):
         pattern = re.compile(r"\$\{([^}]+)\}")
+
         def replacer(match: re.Match) -> str:
             env_key = match.group(1)
             env_val = os.environ.get(env_key)
             if env_val is None:
                 raise ValueError(f"Environment variable '{env_key}' not set")
             return env_val
+
         return pattern.sub(replacer, value)
     if isinstance(value, dict):
         return {k: _expand_env_vars(v) for k, v in value.items()}
@@ -36,13 +38,19 @@ def _expand_env_vars(value: Any) -> Any:
 @dataclass
 class ChannelConfig:
     """A Slack channel to monitor."""
+
     name: str
     id: str
 
 
 @dataclass
 class SlackConfig:
-    """Slack connection settings."""
+    """Slack API connection settings.
+
+    For MCP server mode: only bot_token is needed.
+    For Slack agent mode (datakrait): also need app_token for Socket Mode.
+    """
+
     bot_token: str = ""
     app_token: str = ""
     signing_secret: str = ""
@@ -61,27 +69,34 @@ class SlackConfig:
 @dataclass
 class MonitorConfig:
     """Monitoring behavior settings."""
+
     poll_interval_minutes: int = 5
     lookback_days: int = 7
     channels: list[ChannelConfig] = field(default_factory=list)
-    domain_keywords: list[str] = field(default_factory=lambda: [
-        "quicksight", "dbt", "snowflake", "dashboard",
-    ])
-    bot_usernames: list[str] = field(default_factory=lambda: [
-        "slackbot", "github", "jira",
-    ])
+    domain_keywords: list[str] = field(
+        default_factory=lambda: [
+            "quicksight",
+            "dbt",
+            "snowflake",
+            "dashboard",
+        ]
+    )
+    bot_usernames: list[str] = field(
+        default_factory=lambda: [
+            "slackbot",
+            "github",
+            "jira",
+        ]
+    )
     owner_username: str = ""
 
-    # Class-level defaults for from_dict fallback (dataclass field defaults
-    # use default_factory, which is not accessible as a class attribute).
     _DEFAULT_DOMAIN_KEYWORDS = ["quicksight", "dbt", "snowflake", "dashboard"]
     _DEFAULT_BOT_USERNAMES = ["slackbot", "github", "jira"]
 
     @classmethod
     def from_dict(cls, data: dict) -> MonitorConfig:
         channels = [
-            ChannelConfig(name=ch["name"], id=ch["id"])
-            for ch in data.get("channels", [])
+            ChannelConfig(name=ch["name"], id=ch["id"]) for ch in data.get("channels", [])
         ]
         return cls(
             poll_interval_minutes=data.get("poll_interval_minutes", 5),
@@ -94,52 +109,56 @@ class MonitorConfig:
 
 
 @dataclass
-class EngineConfig:
-    """Investigation engine settings."""
-    backend: str = "claude_code"
-    claude_code_path: str = "claude"
-    investigation_timeout: int = 300
-    review_timeout: int = 120
-    max_concurrent: int = 3
+class AnthropicConfig:
+    """Anthropic API settings for the agent orchestration layer."""
+
+    api_key: str = ""
+    model: str = "claude-opus-4-6-20250219"
+    max_tokens: int = 4096
+    thinking: str = "adaptive"
+    temperature: float = 1.0
+    max_concurrent_agents: int = 5
+    timeout_seconds: int = 300
 
     @classmethod
-    def from_dict(cls, data: dict) -> EngineConfig:
+    def from_dict(cls, data: dict) -> AnthropicConfig:
         return cls(
-            backend=data.get("backend", "claude_code"),
-            claude_code_path=data.get("claude_code_path", "claude"),
-            investigation_timeout=data.get("investigation_timeout", 300),
-            review_timeout=data.get("review_timeout", 120),
-            max_concurrent=data.get("max_concurrent", 3),
-        )
-
-
-@dataclass
-class DeliveryConfig:
-    """Response delivery settings."""
-    mode: str = "human_approval"
-    auto_respond_confidence: float = 0.9
-
-    @classmethod
-    def from_dict(cls, data: dict) -> DeliveryConfig:
-        return cls(
-            mode=data.get("mode", "human_approval"),
-            auto_respond_confidence=data.get("auto_respond_confidence", 0.9),
+            api_key=data.get("api_key", ""),
+            model=data.get("model", "claude-opus-4-6-20250219"),
+            max_tokens=data.get("max_tokens", 4096),
+            thinking=data.get("thinking", "adaptive"),
+            temperature=data.get("temperature", 1.0),
+            max_concurrent_agents=data.get("max_concurrent_agents", 5),
+            timeout_seconds=data.get("timeout_seconds", 300),
         )
 
 
 @dataclass
 class QualityConfig:
     """Quality review settings."""
+
     max_rounds: int = 3
     min_pass_criteria: int = 5
-    criteria: list[str] = field(default_factory=lambda: [
-        "data_accuracy", "completeness", "root_cause",
-        "time_period", "tone", "actionable", "caveats",
-    ])
+    criteria: list[str] = field(
+        default_factory=lambda: [
+            "data_accuracy",
+            "completeness",
+            "root_cause",
+            "time_period",
+            "tone",
+            "actionable",
+            "caveats",
+        ]
+    )
 
     _DEFAULT_CRITERIA = [
-        "data_accuracy", "completeness", "root_cause",
-        "time_period", "tone", "actionable", "caveats",
+        "data_accuracy",
+        "completeness",
+        "root_cause",
+        "time_period",
+        "tone",
+        "actionable",
+        "caveats",
     ]
 
     @classmethod
@@ -152,28 +171,9 @@ class QualityConfig:
 
 
 @dataclass
-class LearningConfig:
-    """Learning engine settings."""
-    enabled: bool = True
-    storage_dir: str = "~/.slack-data-bot/learning"
-    feedback_tracking: bool = True
-
-    @classmethod
-    def from_dict(cls, data: dict) -> LearningConfig:
-        return cls(
-            enabled=data.get("enabled", True),
-            storage_dir=data.get("storage_dir", "~/.slack-data-bot/learning"),
-            feedback_tracking=data.get("feedback_tracking", True),
-        )
-
-    @property
-    def storage_path(self) -> Path:
-        return Path(self.storage_dir).expanduser()
-
-
-@dataclass
 class CacheConfig:
     """Cache settings."""
+
     directory: str = "~/.slack-data-bot"
     answer_ttl_days: int = 30
 
@@ -192,12 +192,11 @@ class CacheConfig:
 @dataclass
 class BotConfig:
     """Top-level bot configuration."""
+
     slack: SlackConfig = field(default_factory=SlackConfig)
     monitoring: MonitorConfig = field(default_factory=MonitorConfig)
-    engine: EngineConfig = field(default_factory=EngineConfig)
-    delivery: DeliveryConfig = field(default_factory=DeliveryConfig)
+    anthropic: AnthropicConfig = field(default_factory=AnthropicConfig)
     quality: QualityConfig = field(default_factory=QualityConfig)
-    learning: LearningConfig = field(default_factory=LearningConfig)
     cache: CacheConfig = field(default_factory=CacheConfig)
 
     @classmethod
@@ -205,10 +204,8 @@ class BotConfig:
         return cls(
             slack=SlackConfig.from_dict(data.get("slack", {})),
             monitoring=MonitorConfig.from_dict(data.get("monitoring", {})),
-            engine=EngineConfig.from_dict(data.get("engine", {})),
-            delivery=DeliveryConfig.from_dict(data.get("delivery", {})),
+            anthropic=AnthropicConfig.from_dict(data.get("anthropic", {})),
             quality=QualityConfig.from_dict(data.get("quality", {})),
-            learning=LearningConfig.from_dict(data.get("learning", {})),
             cache=CacheConfig.from_dict(data.get("cache", {})),
         )
 
