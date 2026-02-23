@@ -24,9 +24,12 @@ import logging
 
 from mcp.server.fastmcp import FastMCP
 
+from slack_data_bot.anthropic_client import AnthropicClient
 from slack_data_bot.cache.state import BotState
+from slack_data_bot.classifier import classify_question as _classify
 from slack_data_bot.config import BotConfig, load_config
 from slack_data_bot.models import (
+    AgentFinding,
     ClassifyQuestionInput,
     ClassifyQuestionOutput,
     DraftResponseInput,
@@ -252,79 +255,22 @@ async def classify_question(
     """
     params = ClassifyQuestionInput(text=text, channel_context=channel_context)
 
-    # Heuristic classification (fast, no API call needed)
-    text_lower = params.text.lower()
+    # Use the classifier module (heuristic, fast, no API call)
+    classification = _classify(params.text, params.channel_context)
 
-    question_type = QuestionType.UNKNOWN
-    confidence = 0.5
-
-    # Pattern matching for question types
-    if any(w in text_lower for w in ["how many", "count", "total", "number of"]):
-        question_type = QuestionType.COUNT
-        confidence = 0.8
-    elif any(w in text_lower for w in ["trend", "over time", "week over week", "month over month"]):
-        question_type = QuestionType.TREND
-        confidence = 0.8
-    elif any(w in text_lower for w in ["compare", "vs", "versus", "difference between"]):
-        question_type = QuestionType.COMPARISON
-        confidence = 0.8
-    elif any(w in text_lower for w in ["what is", "what does", "define", "meaning of"]):
-        question_type = QuestionType.DEFINITION
-        confidence = 0.7
-    elif any(w in text_lower for w in ["why", "root cause", "reason", "dropped", "spiked"]):
-        question_type = QuestionType.ROOT_CAUSE
-        confidence = 0.7
-    elif any(
-        w in text_lower for w in ["lineage", "where does", "source", "upstream", "downstream"]
-    ):
-        question_type = QuestionType.LINEAGE
-        confidence = 0.8
-    elif any(w in text_lower for w in ["status", "is it running", "failed", "broken"]):
-        question_type = QuestionType.STATUS
-        confidence = 0.7
-    elif any(w in text_lower for w in ["how to", "how do i", "how can i"]):
-        question_type = QuestionType.HOW_TO
-        confidence = 0.7
-
-    # Extract potential entities (simple heuristic)
-    entities: list[str] = []
-    # Look for common data terms
-    data_terms = [
-        "quicksight", "dbt", "snowflake", "dashboard", "model", "table",
-        "metric", "report", "pipeline", "dag", "spice", "dataset",
-    ]
-    for term in data_terms:
-        if term in text_lower:
-            entities.append(term)
-
-    # Time period extraction
-    time_period = None
-    time_patterns = [
-        "last week", "this week", "last month", "this month",
-        "yesterday", "today", "last quarter", "this quarter",
-        "q1", "q2", "q3", "q4", "ytd", "mtd", "wtd",
-    ]
-    for pattern in time_patterns:
-        if pattern in text_lower:
-            time_period = pattern
-            break
-
-    # Complexity estimation
-    word_count = len(params.text.split())
-    if word_count < 15:
-        complexity = "simple"
-    elif word_count < 40:
-        complexity = "medium"
-    else:
-        complexity = "complex"
+    # Map classifier output to model
+    try:
+        q_type = QuestionType(classification.question_type)
+    except ValueError:
+        q_type = QuestionType.UNKNOWN
 
     output = ClassifyQuestionOutput(
-        question_type=question_type,
-        confidence=confidence,
-        entities=entities,
-        time_period=time_period,
+        question_type=q_type,
+        confidence=classification.confidence,
+        entities=classification.entities,
+        time_period=classification.time_period,
         suggested_tables=[],
-        complexity=complexity,
+        complexity=classification.complexity,
     )
     return output.model_dump_json(indent=2)
 
@@ -382,20 +328,64 @@ async def investigate_question(
         max_agent_rounds=max_agent_rounds,
     )
 
-    # Sprint 1 stub - full agent orchestration comes in Sprint 2
+    config = _get_config()
+
+    # Check for Anthropic API key
+    if not config.anthropic.api_key:
+        return json.dumps({
+            "error": "No Anthropic API key configured. "
+            "Set anthropic.api_key in config or ANTHROPIC_API_KEY env var."
+        })
+
+    from slack_data_bot.orchestrator import Orchestrator
+
+    client = AnthropicClient(
+        api_key=config.anthropic.api_key,
+        model=config.anthropic.model,
+        max_tokens=config.anthropic.max_tokens,
+        timeout=config.anthropic.timeout_seconds,
+    )
+    orchestrator = Orchestrator(
+        client=client,
+        max_quality_rounds=params.max_agent_rounds,
+        min_pass_criteria=config.quality.min_pass_criteria,
+    )
+
+    context = {
+        "questioner_name": params.questioner_name,
+        "questioner_role": params.questioner_role,
+        "channel_name": params.channel_name,
+        "thread_context": params.thread_context,
+    }
+
+    result = await orchestrator.investigate(params.question, context)
+
+    # Convert agent results to model
+    findings = [
+        AgentFinding(
+            agent_name=ar.agent_name,
+            finding_type="insight",
+            content=json.dumps(ar.findings) if ar.findings else (ar.error or ""),
+            confidence=0.8 if ar.success else 0.0,
+            sources=[],
+        )
+        for ar in result.agent_results
+    ]
+
+    # Map question_type string to enum
+    try:
+        q_type = QuestionType(result.question_type)
+    except ValueError:
+        q_type = QuestionType.UNKNOWN
+
     output = InvestigateQuestionOutput(
-        response=(
-            f"*Investigation pending (Sprint 2)*\n\n"
-            f"Question: {params.question}\n"
-            f"Agent orchestration will be implemented in Sprint 2.\n"
-            f"Use `classify_question` and `draft_response` for now."
-        ),
-        question_type=QuestionType.UNKNOWN,
-        findings=[],
-        quality_score=0,
-        quality_total=7,
-        review_rounds=0,
-        agents_used=[],
+        response=result.response,
+        question_type=q_type,
+        findings=findings,
+        quality_score=result.quality_score,
+        quality_total=result.quality_total,
+        review_rounds=len(result.quality_iterations),
+        agents_used=result.agents_used,
     )
     return output.model_dump_json(indent=2)
 
