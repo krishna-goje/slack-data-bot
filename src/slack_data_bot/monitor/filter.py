@@ -20,7 +20,7 @@ class MessageFilter:
 
     # FYI patterns that indicate the @mention is informational, not a question
     _FYI_PATTERNS = re.compile(
-        r"(?i)\b(?:cc:|fyi:|looping\s+in\s+@|adding\s+@|copying\s+@|cc\s+@|cc'ing)",
+        r"(?i)\b(?:cc:?\s|fyi:?\s|fyi\b|looping\s+in\s+@|adding\s+@|copying\s+@|cc\s+@|cc'ing)",
     )
 
     # Question indicators
