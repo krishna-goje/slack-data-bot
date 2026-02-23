@@ -433,20 +433,89 @@ async def draft_response(
         format=format,
     )
 
-    # Sprint 1 basic formatting (full writer/reviewer in Sprint 3)
-    response = (
-        f"*Re: {params.question}*\n\n"
-        f"{params.findings}\n\n"
-        f"_Draft generated with basic formatting. "
-        f"Full Writer/Reviewer loop coming in Sprint 3._"
+    config = _get_config()
+
+    # If no Anthropic key, fall back to basic formatting
+    if not config.anthropic.api_key:
+        response = (
+            f"*Re: {params.question}*\n\n"
+            f"{params.findings}"
+        )
+        output = DraftResponseOutput(
+            response=response,
+            format=params.format,
+            quality_score=0,
+            quality_total=7,
+            review_rounds=0,
+        )
+        return output.model_dump_json(indent=2)
+
+    # Full writer/reviewer loop via Anthropic API
+    from slack_data_bot.agents.reviewer import ReviewerAgent
+    from slack_data_bot.agents.writer import WriterAgent
+
+    client = AnthropicClient(
+        api_key=config.anthropic.api_key,
+        model=config.anthropic.model,
+        max_tokens=config.anthropic.max_tokens,
     )
 
+    writer = WriterAgent()
+    reviewer = ReviewerAgent()
+
+    context = {
+        "question": params.question,
+        "findings": {"provided_findings": params.findings},
+        "round_number": 1,
+        "previous_feedback": "",
+    }
+
+    best_draft = ""
+    best_score = 0
+    rounds = 0
+
+    for round_num in range(1, config.quality.max_rounds + 1):
+        context["round_number"] = round_num
+        rounds = round_num
+
+        # Writer: generate draft
+        writer_result = await writer.run(client, context)
+        draft = ""
+        if writer_result.success:
+            draft = writer_result.findings.get("response_text", writer_result.raw_text)
+        else:
+            draft = f"*Re: {params.question}*\n\n{params.findings}"
+            break
+
+        # Reviewer: check quality
+        context["draft"] = draft
+        reviewer_result = await reviewer.run(client, context)
+        passed_count = 0
+        if reviewer_result.success:
+            criteria = reviewer_result.findings.get("criteria", {})
+            passed_count = sum(
+                1 for c in criteria.values()
+                if isinstance(c, dict) and c.get("status") == "PASS"
+            )
+
+        if passed_count > best_score:
+            best_score = passed_count
+            best_draft = draft
+
+        if passed_count >= config.quality.min_pass_criteria:
+            break
+
+        # Feed back for next round
+        context["previous_feedback"] = reviewer_result.findings.get(
+            "revision_guidance", ""
+        )
+
     output = DraftResponseOutput(
-        response=response,
+        response=best_draft or draft,
         format=params.format,
-        quality_score=0,
+        quality_score=best_score,
         quality_total=7,
-        review_rounds=0,
+        review_rounds=rounds,
     )
     return output.model_dump_json(indent=2)
 
