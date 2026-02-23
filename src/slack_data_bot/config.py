@@ -45,15 +45,23 @@ class ChannelConfig:
 
 @dataclass
 class SlackConfig:
-    """Slack API connection settings (token-only, no bolt)."""
+    """Slack API connection settings.
+
+    For MCP server mode: only bot_token is needed.
+    For Slack agent mode (datakrait): also need app_token for Socket Mode.
+    """
 
     bot_token: str = ""
+    app_token: str = ""
+    signing_secret: str = ""
     owner_user_id: str = ""
 
     @classmethod
     def from_dict(cls, data: dict) -> SlackConfig:
         return cls(
             bot_token=data.get("bot_token", ""),
+            app_token=data.get("app_token", ""),
+            signing_secret=data.get("signing_secret", ""),
             owner_user_id=data.get("owner_user_id", ""),
         )
 

@@ -44,9 +44,14 @@ dev = [
     "ruff>=0.1",
     "mypy>=1.0",
 ]
+slack-agent = [
+    "slack-bolt>=1.21",
+    "slack-sdk>=3.33",
+]
 
 [project.scripts]
 slack-data-bot = "slack_data_bot.server:main"
+datakrait = "slack_data_bot.slack_app:main"
 
 [project.urls]
 Homepage = "https://github.com/krishna-goje/slack-data-bot"
